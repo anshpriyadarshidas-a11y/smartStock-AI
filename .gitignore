@@ -16,3 +16,10 @@ backend/data/*.db
 *.log
 .DS_Store
 Thumbs.db
+
+# ML service generated artifacts
+ml/models/*.pkl
+ml/models/*.json
+ml/plots/
+ml/logs/
+ml/dataset/*.csv
