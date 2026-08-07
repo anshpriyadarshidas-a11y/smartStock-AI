@@ -6,8 +6,10 @@ module.exports = {
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
   jwtExpires: process.env.JWT_EXPIRES || '8h',
   mongoUri: process.env.MONGO_URI || '',
+  mongoDbName: process.env.MONGO_DB_NAME || 'smartstock',
   aiServiceUrl: process.env.AI_SERVICE_URL || '',
-  dataDir: path.resolve(__dirname, '..', 'data'),
+  dataDir: process.env.DATA_DIR || path.resolve(__dirname, '..', 'data'),
+  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: Number(process.env.SMTP_PORT || 587),
@@ -19,4 +21,7 @@ module.exports = {
     botToken: process.env.TELEGRAM_BOT_TOKEN || '',
     chatId: process.env.TELEGRAM_CHAT_ID || '',
   },
+  trendApiUrl: process.env.TREND_API_URL || '',
+  newsApiKey: process.env.NEWS_API_KEY || '',
+  googleTrendsUrl: process.env.GOOGLE_TRENDS_URL || '',
 };

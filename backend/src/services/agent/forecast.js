@@ -106,13 +106,14 @@ function forecast(product, supplier, sales, opts = {}) {
 
   const isShortageRisk = shortageProbability >= 0.5 || daysOfStockRemaining <= leadTime;
 
-  const stockAfterDemand = product.currentStock - predictedDemand;
   const gap = Math.max(product.minimumStock, predictedDemand) - product.currentStock;
   const recommendedOrderQty = isShortageRisk && gap > 0 ? roundUp(gap) : 0;
 
-  const safetyStock = product.minimumStock;
+  const reviewInDays = Number.isFinite(daysOfStockRemaining)
+    ? Math.max(0, Math.floor(daysOfStockRemaining - leadTime))
+    : 30;
   const suggestedOrderDate = !isShortageRisk
-    ? isoDaysFromNow(Math.max(0, Math.floor(daysOfStockRemaining - leadTime)))
+    ? isoDaysFromNow(reviewInDays)
     : isoDaysFromNow(0);
 
   const dataPoints = quantities.filter((q) => q > 0).length;

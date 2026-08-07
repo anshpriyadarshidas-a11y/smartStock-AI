@@ -1,7 +1,5 @@
 const bcrypt = require('bcryptjs');
-const path = require('path');
-const { Store } = require('./store');
-const config = require('../config');
+const { initStore, getStore } = require('./db');
 
 function daysAgoISO(days, hour = 10) {
   const d = new Date();
@@ -81,8 +79,8 @@ function seededData() {
   };
 }
 
-async function seedData({ force = false } = {}) {
-  const store = new Store(path.join(config.dataDir, 'db.json'));
+async function seedData({ force = false, store = null } = {}) {
+  store = store || getStore();
   const hasData = store.count('products') > 0 || store.count('sales') > 0;
 
   if (hasData && !force) {
@@ -90,40 +88,40 @@ async function seedData({ force = false } = {}) {
     return { seeded: false };
   }
 
-  store.data = seededData();
+  const data = seededData();
 
   const password = await bcrypt.hash('password123', 10);
-  store.insert('users', {
-    id: 1,
-    name: 'System Admin',
-    email: 'admin@smartstock.dev',
-    passwordHash: password,
-    role: 'admin',
-  });
-  store.insert('users', {
-    id: 2,
-    name: 'Priya Manager',
-    email: 'manager@smartstock.dev',
-    passwordHash: password,
-    role: 'manager',
-  });
-  store.insert('users', {
-    id: 3,
-    name: 'Ravi Employee',
-    email: 'employee@smartstock.dev',
-    passwordHash: password,
-    role: 'employee',
-  });
+  data.users = [
+    { id: 1, name: 'System Admin', email: 'admin@smartstock.dev', passwordHash: password, role: 'admin' },
+    { id: 2, name: 'Priya Manager', email: 'manager@smartstock.dev', passwordHash: password, role: 'manager' },
+    { id: 3, name: 'Ravi Employee', email: 'employee@smartstock.dev', passwordHash: password, role: 'employee' },
+  ];
 
-  store._persist();
+  if (store.seedFrom) {
+    await store.seedFrom(data);
+  } else {
+    store.data = data;
+    store._persist();
+  }
+
   console.log('[seed] demo data seeded: 3 users, 4 suppliers, 8 products, ~90 days of sales.');
   return { seeded: true };
 }
 
 if (require.main === module) {
-  seedData({ force: process.argv.includes('--force') }).then(({ seeded }) => {
-    if (!seeded) process.exit(0);
-  });
+  initStore()
+    .then((store) => seedData({ force: process.argv.includes('--force'), store }))
+    .then(async ({ seeded }) => {
+      const active = getStore();
+      if (active && typeof active.close === 'function') {
+        await active.close().catch(() => {});
+      }
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('[seed] failed:', err);
+      process.exit(1);
+    });
 }
 
 module.exports = { seedData, seededData };

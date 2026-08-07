@@ -1,6 +1,7 @@
 const { getStore } = require('../../db/db');
 const { predict } = require('../mlClient');
 const trendSkill = require('./skills/marketTrendAnalyzer');
+const notify = require('../notify');
 
 function getSales(store, productId) {
   return store
@@ -33,6 +34,7 @@ async function analyzeProduct(store, product, opts = {}) {
     suggestedOrderDate: result.suggestedOrderDate,
     shortageProbability: result.shortageProbability,
     shortageRisk: result.shortageRisk,
+    daysOfStockRemaining: result.daysOfStockRemaining,
     reason: result.reasoning.join(' '),
     trendScore: trend.score,
     trendNote: trend.note,
@@ -45,8 +47,10 @@ async function analyzeProduct(store, product, opts = {}) {
 
 /**
  * Run the Inventory Operations Agent across all products (or one).
- * Fetches inventory, analyzes sales, applies market trends, forecasts demand,
- * detects shortage risk and generates recommendations.
+ * Implements the documented workflow:
+ * Fetch Inventory -> Analyze Sales -> Collect Trends -> Forecast Demand ->
+ * Compare Stock -> Detect Risk -> Generate Recommendation -> Explain Decision
+ * -> Notify Manager (waiting for approval happens via the approve endpoint).
  */
 async function runAnalysis({ productId = null } = {}) {
   const store = getStore();
@@ -55,20 +59,37 @@ async function runAnalysis({ productId = null } = {}) {
 
   for (const product of products) {
     const { prediction } = await analyzeProduct(store, product);
-    store.insert('predictions', prediction);
+
+    // A newer run supersedes the previous pending recommendation so only the
+    // latest one waits for approval while history stays intact.
+    const previous = store.find(
+      'predictions',
+      (p) => p.productId === product.id && p.status === 'pending'
+    );
+    for (const old of previous) {
+      await store.update('predictions', old.id, { status: 'superseded' });
+    }
+
+    await store.insert('predictions', prediction);
     results.push(prediction);
 
     if (prediction.shortageRisk) {
       const message =
         `Shortage risk for ${product.name}: stock (${product.currentStock}) covers ~` +
-        `${prediction.forecastDemand ? (product.currentStock / Math.max(prediction.predictedDailyDemand, 0.001)).toFixed(1) : '?'} days. ` +
+        `${prediction.predictedDailyDemand ? (product.currentStock / Math.max(prediction.predictedDailyDemand, 0.001)).toFixed(1) : '?'} days. ` +
         `Recommended order ${prediction.recommendedOrderQty} units (confidence ${prediction.confidence}%).`;
-      store.insert('alerts', {
+      await store.insert('alerts', {
         type: prediction.shortageProbability >= 0.7 ? 'critical' : 'shortage_risk',
         productId: product.id,
         message,
         severity: prediction.shortageProbability >= 0.7 ? 'high' : 'medium',
         read: false,
+      });
+      await notify.send({
+        type: prediction.shortageProbability >= 0.7 ? 'critical' : 'shortage_risk',
+        message,
+        payload: { productId: product.id },
+        via: ['log', 'telegram'],
       });
     }
   }

@@ -51,20 +51,22 @@
 
   /* ---------------- Data loading ---------------- */
   async function loadAll() {
-    const [products, suppliers, sales, predictions, alerts, auditLogs] = await Promise.all([
-      SmartStockAPI.getProducts(),
-      SmartStockAPI.getSuppliers(),
-      SmartStockAPI.getSales(),
-      SmartStockAPI.getForecast(),
-      SmartStockAPI.getAlerts(),
-      SmartStockAPI.getAuditLogs()
-    ]);
-    state.products = products;
-    state.suppliers = suppliers;
-    state.sales = sales;
-    state.predictions = predictions;
-    state.alerts = alerts;
-    state.auditLogs = auditLogs;
+    const calls = {
+      products: SmartStockAPI.getProducts(),
+      suppliers: SmartStockAPI.getSuppliers(),
+      sales: SmartStockAPI.getSales(),
+      predictions: SmartStockAPI.getForecast(),
+      alerts: SmartStockAPI.getAlerts(),
+      auditLogs: SmartStockAPI.getAuditLogs()
+    };
+    const settled = await Promise.allSettled(Object.values(calls));
+    const keys = Object.keys(calls);
+    let failed = 0;
+    settled.forEach((r, i) => {
+      if (r.status === 'fulfilled') state[keys[i]] = r.value;
+      else { failed += 1; console.warn(`loadAll: ${keys[i]} failed`, r.reason); }
+    });
+    if (failed > 0) toast(`Some data failed to load (${failed} source${failed > 1 ? 's' : ''})`, 'error');
     updateNotifBadges();
   }
 
@@ -343,7 +345,7 @@
           <table class="table">
             <thead>
               <tr>
-                <th>Product</th><th>Warehouse</th><th>Stock</th><th>Min</th><th>Health</th><th>Price</th><th>Supplier</th><th>Trend</th>
+                <th>Product</th><th>Warehouse</th><th>Stock</th><th>Min</th><th>Health</th><th>Price</th><th>Supplier</th><th>Trend</th><th>Actions</th>
               </tr>
             </thead>
             <tbody id="inv-body"></tbody>
@@ -374,7 +376,7 @@
       return matchQ && matchC;
     });
     if (!filtered.length) {
-      return `<tr><td colspan="8"><div class="empty-state"><div class="big">🔍</div><p class="text-sm">No products match your filters.</p></div></td></tr>`;
+      return `<tr><td colspan="9"><div class="empty-state"><div class="big">🔍</div><p class="text-sm">No products match your filters.</p></div></td></tr>`;
     }
     return filtered.map((p) => {
       const h = stockHealth(p);
@@ -396,6 +398,12 @@
           <td class="font-semibold text-slate-700">${fmtMoney(p.price)}</td>
           <td class="text-slate-500">${escapeHtml(supplierName(p.supplierId))}</td>
           <td>${trend ? `<span class="badge ${trend.trendScore >= 60 ? 'badge-emerald' : trend.trendScore >= 50 ? 'badge-blue' : 'badge-slate'}">${trend.trendScore}%</span>` : '—'}</td>
+          <td>
+            <div class="flex items-center gap-2">
+              <button class="btn btn-ghost btn-sm" data-action="adjust" data-id="${p.id}">✎ Adjust</button>
+              <button class="btn btn-ghost btn-sm" data-action="record-sale-for" data-id="${p.id}" title="Record a sale">🛒 Sell</button>
+            </div>
+          </td>
         </tr>`;
     }).join('');
   }
@@ -455,6 +463,9 @@
         <div>
           <h2 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">Sales Analytics</h2>
           <p class="text-sm text-slate-500 mt-1">Historical demand feeds every agent forecast</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="btn btn-primary" data-action="open-record-sale"><span>＋</span> Record sale</button>
         </div>
       </div>
 
@@ -652,10 +663,15 @@
     const comment = $('modal-comment').value;
     if (!rec) return;
     closeModal();
-    await SmartStockAPI.approve({ id: rec.productId, decision, comment });
-    await loadAll();
-    toast(decision === 'approved' ? `Order approved — ${rec.recommendedOrderQty} units of ${rec.productName} queued` : `${rec.productName} recommendation rejected`, decision === 'approved' ? 'success' : 'info');
-    renderPredictions();
+    try {
+      await SmartStockAPI.approve({ id: rec.productId, decision, comment });
+      await loadAll();
+      toast(decision === 'approved' ? `Order approved — ${rec.recommendedOrderQty} units of ${rec.productName} queued` : `${rec.productName} recommendation rejected`, decision === 'approved' ? 'success' : 'info');
+      renderPredictions();
+    } catch (err) {
+      toast(err.message || 'Approval failed', 'error');
+      renderPredictions();
+    }
   }
 
   /* ---------------- Add product modal (inline builder) ---------------- */
@@ -712,17 +728,111 @@
       supplierId: Number($('ap-supplier').value)
     };
     try {
-      await fetch(`${SmartStockAPI.base}/products`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(product)
-      });
-    } catch (err) { /* offline: keep in memory */ }
-    product.id = state.products.length + 1;
-    state.products.push(product);
-    $('add-modal-root').remove();
-    toast(`${name} added to inventory`, 'success');
-    renderInventory();
+      await SmartStockAPI.createProduct(product);
+      $('add-modal-root').remove();
+      toast(`${name} added to inventory`, 'success');
+      await loadAll();
+      renderInventory();
+    } catch (err) {
+      toast(err.message || 'Failed to add product', 'error');
+    }
+  }
+
+  /* ---------------- Record sale modal ---------------- */
+  function renderRecordSaleModal(productId = null) {
+    const opts = state.products.map((p) =>
+      `<option value="${p.id}" ${Number(productId) === p.id ? 'selected' : ''}>${escapeHtml(p.name)} (in stock: ${p.currentStock})</option>`
+    ).join('');
+    const html = `
+      <div id="record-sale-modal" class="modal">
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-panel glass rounded-3xl p-6 sm:p-8 max-w-md w-full">
+          <h3 class="text-xl font-bold text-slate-900 mb-1">Record a sale</h3>
+          <p class="text-sm text-slate-500 mb-5">Sales automatically consume inventory for the next forecast.</p>
+          <div class="space-y-4">
+            <div><label class="form-label">Product</label>
+              <select id="sale-product" class="input-base">${opts}</select></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="form-label">Quantity</label><input id="sale-qty" type="number" min="1" step="1" value="1" class="input-base" /></div>
+              <div><label class="form-label">Date</label><input id="sale-date" type="date" value="${new Date().toISOString().slice(0, 10)}" class="input-base" /></div>
+            </div>
+            <div class="flex gap-3 mt-2 justify-end">
+              <button class="btn btn-ghost" data-close-modal>Cancel</button>
+              <button class="btn btn-primary" data-action="submit-sale">＋ Record sale</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    const div = document.createElement('div');
+    div.id = 'record-sale-root';
+    div.innerHTML = html;
+    document.body.appendChild(div);
+  }
+
+  async function submitSale() {
+    const productId = Number($('sale-product').value);
+    const quantity = Number($('sale-qty').value);
+    const date = $('sale-date').value || undefined;
+    if (!productId || !quantity || quantity <= 0) { toast('Enter a valid quantity', 'error'); return; }
+    const btn = document.querySelector('[data-action="submit-sale"]');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      await SmartStockAPI.recordSale({ productId, quantity, date });
+      $('record-sale-root').remove();
+      toast('Sale recorded — inventory updated', 'success');
+      await loadAll();
+      switchSection(state.section);
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = '＋ Record sale';
+      toast(err.message || 'Failed to record sale', 'error');
+    }
+  }
+
+  /* ---------------- Adjust stock modal ---------------- */
+  function renderAdjustStockModal(productId) {
+    const p = state.products.find((x) => x.id === productId);
+    if (!p) return;
+    const html = `
+      <div id="adjust-modal" class="modal">
+        <div class="modal-backdrop" data-close-modal></div>
+        <div class="modal-panel glass rounded-3xl p-6 sm:p-8 max-w-md w-full">
+          <h3 class="text-xl font-bold text-slate-900 mb-1">Adjust stock</h3>
+          <p class="text-sm text-slate-500 mb-5">${escapeHtml(p.name)} · currently <b>${fmtInt(p.currentStock)}</b> units (min ${p.minimumStock})</p>
+          <div class="space-y-4">
+            <div><label class="form-label">New stock level</label><input id="adj-stock" type="number" min="0" step="1" value="${p.currentStock}" class="input-base" /></div>
+            <div class="flex gap-3 mt-2 justify-end">
+              <button class="btn btn-ghost" data-close-modal>Cancel</button>
+              <button class="btn btn-primary" data-action="submit-adjust" data-id="${p.id}">✓ Save stock</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    const div = document.createElement('div');
+    div.id = 'adjust-root';
+    div.innerHTML = html;
+    document.body.appendChild(div);
+  }
+
+  async function submitAdjust() {
+    const btn = document.querySelector('[data-action="submit-adjust"]');
+    const productId = Number(btn.dataset.id);
+    const currentStock = Number($('adj-stock').value);
+    if (Number.isNaN(currentStock) || currentStock < 0) { toast('Enter a valid stock level', 'error'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      await SmartStockAPI.updateProduct(productId, { currentStock });
+      $('adjust-root').remove();
+      toast('Inventory updated', 'success');
+      await loadAll();
+      switchSection(state.section);
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = '✓ Save stock';
+      toast(err.message || 'Failed to update stock', 'error');
+    }
   }
 
   /* ---------------- Login ---------------- */
@@ -735,16 +845,23 @@
     label.textContent = 'Signing in…';
     spinner.classList.remove('hidden');
 
-    const result = await SmartStockAPI.login(email, password);
-    state.user = result.user;
-    localStorage.setItem('ssai_user', JSON.stringify(state.user));
-    if (result.token) localStorage.setItem('ssai_token', result.token);
-    if (result.demo) {
-      $('demo-mode').classList.remove('hidden');
-    } else {
-      $('demo-mode').classList.add('hidden');
+    try {
+      const result = await SmartStockAPI.login(email, password);
+      state.user = result.user;
+      localStorage.setItem('ssai_user', JSON.stringify(state.user));
+      if (result.token) localStorage.setItem('ssai_token', result.token);
+      if (result.demo) {
+        $('demo-mode').classList.remove('hidden');
+      } else {
+        $('demo-mode').classList.add('hidden');
+      }
+      showApp();
+    } catch (err) {
+      label.textContent = 'Sign in';
+      spinner.classList.add('hidden');
+      submitBtn.disabled = false;
+      statusEl.textContent = err.message || 'Sign in failed';
     }
-    showApp();
   }
 
   function showApp() {
@@ -817,8 +934,10 @@
       const modal = $('approve-modal');
       if (modal && !modal.classList.contains('hidden') && e.target.dataset.closeModal !== undefined) closeModal();
       if (e.target.dataset.closeModal !== undefined) {
-        const addRoot = $('add-modal-root');
-        if (addRoot && addRoot.contains(e.target)) addRoot.remove();
+        ['add-modal-root', 'record-sale-root', 'adjust-root'].forEach((id) => {
+          const root = $(id);
+          if (root && root.contains(e.target)) root.remove();
+        });
       }
     });
 
@@ -836,6 +955,11 @@
       }
       if (kind === 'open-add-product') renderAddProductModal();
       if (kind === 'submit-add') submitAddProduct();
+      if (kind === 'open-record-sale') renderRecordSaleModal();
+      if (kind === 'record-sale-for') renderRecordSaleModal(Number(action.dataset.id));
+      if (kind === 'submit-sale') submitSale();
+      if (kind === 'adjust') renderAdjustStockModal(Number(action.dataset.id));
+      if (kind === 'submit-adjust') submitAdjust();
     });
 
     $('confirm-approve-btn').addEventListener('click', confirmApproval);
@@ -852,13 +976,20 @@
 
   async function runAgent(btn) {
     btn.disabled = true;
+    const original = btn.textContent;
     btn.textContent = '⏳ Analyzing…';
-    await SmartStockAPI.runAnalysis();
-    await loadAll();
-    btn.disabled = false;
-    btn.textContent = '⚡ Run agent analysis';
-    toast('Inventory agent analysis complete — recommendations refreshed', 'success');
-    switchSection(state.section);
+    try {
+      await SmartStockAPI.runAnalysis();
+      await loadAll();
+      btn.disabled = false;
+      btn.textContent = '⚡ Run agent analysis';
+      toast('Inventory agent analysis complete — recommendations refreshed', 'success');
+      switchSection(state.section);
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = original;
+      toast(err.message || 'Agent analysis failed', 'error');
+    }
   }
 
   (function boot() {
