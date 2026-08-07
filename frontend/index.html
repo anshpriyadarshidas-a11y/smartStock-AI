@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartStock AI — Agent-Driven Inventory Operations</title>
+  <meta name="description" content="SmartStock AI predicts shortages, forecasts demand, analyzes market trends and routes restock recommendations through a human approval workflow." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
+              400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8',
+              800: '#1e40af', 900: '#1e3a8a'
+            },
+            mint: {
+              50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7',
+              400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857'
+            }
+          },
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          boxShadow: {
+            glass: '0 8px 32px 0 rgba(31, 38, 135, 0.12)',
+            soft: '0 4px 20px -4px rgba(15, 23, 42, 0.08)',
+            lift: '0 18px 50px -12px rgba(37, 99, 235, 0.25)'
+          },
+          keyframes: {
+            'fade-up': { '0%': { opacity: '0', transform: 'translateY(14px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+            'fade-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            'float-slow': { '0%,100%': { transform: 'translate(0,0) scale(1)' }, '50%': { transform: 'translate(30px,-40px) scale(1.08)' } },
+            'float-slower': { '0%,100%': { transform: 'translate(0,0) scale(1)' }, '50%': { transform: 'translate(-40px,30px) scale(1.05)' } },
+            shimmer: { '0%': { backgroundPosition: '-400px 0' }, '100%': { backgroundPosition: '400px 0' } },
+            pop: { '0%': { transform: 'scale(0.95)' }, '100%': { transform: 'scale(1)' } },
+            spin: { to: { transform: 'rotate(360deg)' } }
+          },
+          animation: {
+            'fade-up': 'fade-up .5s cubic-bezier(.16,1,.3,1) both',
+            'fade-in': 'fade-in .4s ease both',
+            'float-slow': 'float-slow 18s ease-in-out infinite',
+            'float-slower': 'float-slower 26s ease-in-out infinite',
+            'pop': 'pop .25s cubic-bezier(.16,1,.3,1) both'
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body class="bg-[#f8fafc] text-slate-800 antialiased min-h-screen">
+
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob blob-blue"></div>
+    <div class="blob blob-emerald"></div>
+    <div class="blob blob-soft"></div>
+  </div>
+
+  <div id="toast-root" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 items-end"></div>
+
+  <!-- ============ LOGIN VIEW ============ -->
+  <div id="login-view" class="relative z-10 min-h-screen flex items-center justify-center p-6 hidden">
+    <div class="grid lg:grid-cols-2 gap-10 w-full max-w-5xl">
+      <div class="hidden lg:flex flex-col justify-center">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="logo-mark">📦</div>
+          <div>
+            <h1 class="text-2xl font-black tracking-tight text-slate-900">SmartStock <span class="gradient-text">AI</span></h1>
+            <p class="text-xs text-slate-500 font-medium">Agent-Driven Inventory Operations</p>
+          </div>
+        </div>
+        <h2 class="text-4xl font-extrabold tracking-tight leading-tight text-slate-900 mb-5">
+          Shortages predicted.<br />Stock optimized.<br /><span class="gradient-text">Humans in control.</span>
+        </h2>
+        <p class="text-slate-600 leading-relaxed mb-8 max-w-md">
+          The Inventory Operations Agent forecasts demand, reads market trends and drafts explainable
+          restock recommendations — then routes every decision through your approval before any order is placed.
+        </p>
+        <div class="flex flex-wrap gap-3">
+          <span class="chip chip-blue">🔮 Demand forecasting</span>
+          <span class="chip chip-emerald">📈 Market trends</span>
+          <span class="chip chip-white">🛡️ Human approval</span>
+          <span class="chip chip-white">🧾 Audit trail</span>
+        </div>
+      </div>
+
+      <div class="glass rounded-3xl p-8 shadow-glass max-w-md w-full mx-auto">
+        <div class="lg:hidden flex items-center gap-3 mb-6">
+          <div class="logo-mark">📦</div>
+          <h1 class="text-xl font-black tracking-tight text-slate-900">SmartStock <span class="gradient-text">AI</span></h1>
+        </div>
+        <h3 class="text-2xl font-bold text-slate-900 mb-1">Welcome back</h3>
+        <p class="text-sm text-slate-500 mb-7">Sign in to your inventory operations console.</p>
+
+        <form id="login-form" class="space-y-4">
+          <div>
+            <label class="form-label" for="email">Email address</label>
+            <input id="login-email" type="email" required value="admin@smartstock.dev"
+              class="input-base" placeholder="you@company.com" />
+          </div>
+          <div>
+            <label class="form-label" for="password">Password</label>
+            <input id="login-password" type="password" required value="password123"
+              class="input-base" placeholder="••••••••" />
+          </div>
+          <button type="submit" class="btn btn-primary w-full justify-center py-3">
+            <span class="btn-label">Sign in</span>
+            <span class="btn-spinner hidden"><i class="spinner"></i></span>
+          </button>
+        </form>
+
+        <div class="my-6 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+          <div class="h-px flex-1 bg-slate-200"></div> Demo access <div class="h-px flex-1 bg-slate-200"></div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <button class="role-btn" data-email="admin@smartstock.dev">👑<span>Admin</span></button>
+          <button class="role-btn" data-email="manager@smartstock.dev">✅<span>Manager</span></button>
+          <button class="role-btn" data-email="employee@smartstock.dev">🧑‍💼<span>Employee</span></button>
+        </div>
+
+        <p id="login-status" class="mt-5 text-center text-xs text-slate-400"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ APP VIEW ============ -->
+  <div id="app-view" class="relative z-10 hidden">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar glass-sidebar">
+      <div class="flex items-center gap-3 px-5 pt-6 pb-7">
+        <div class="logo-mark">📦</div>
+        <div class="min-w-0">
+          <h1 class="text-lg font-black tracking-tight text-white leading-none">SmartStock <span class="gradient-text-light">AI</span></h1>
+          <p class="text-[10px] text-white/50 font-medium mt-1 tracking-wide">Operations Platform</p>
+        </div>
+      </div>
+
+      <nav class="px-3 space-y-1">
+        <button class="nav-item active" data-section="dashboard">
+          <span class="nav-ico">▦</span><span class="nav-txt">Dashboard</span>
+          <span id="nav-badge-dashboard" class="nav-badge hidden">0</span>
+        </button>
+        <button class="nav-item" data-section="inventory">
+          <span class="nav-ico">🗃️</span><span class="nav-txt">Inventory</span>
+        </button>
+        <button class="nav-item" data-section="predictions">
+          <span class="nav-ico">🤖</span><span class="nav-txt">AI Recommendations</span>
+          <span id="nav-badge-predictions" class="nav-badge hidden">0</span>
+        </button>
+        <button class="nav-item" data-section="sales">
+          <span class="nav-ico">📊</span><span class="nav-txt">Sales Analytics</span>
+        </button>
+        <button class="nav-item" data-section="suppliers">
+          <span class="nav-ico">🚚</span><span class="nav-txt">Suppliers</span>
+        </button>
+        <button class="nav-item" data-section="audit">
+          <span class="nav-ico">🧾</span><span class="nav-txt">Audit Log</span>
+        </button>
+      </nav>
+
+      <div class="mt-auto px-4 pb-6">
+        <div class="agent-card">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="relative flex h-2.5 w-2.5">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-mint-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-mint-500"></span>
+            </span>
+            <span class="text-[11px] font-bold text-white">Inventory Agent</span>
+          </div>
+          <p class="text-[10px] text-white/60 leading-snug">Monitoring 8 products · last run just now</p>
+          <button id="run-agent-btn" data-action="run-agent" class="mt-3 w-full text-[11px] font-semibold py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition">⚡ Run agent analysis</button>
+        </div>
+      </div>
+    </aside>
+
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- Main -->
+    <div class="app-main">
+      <!-- Topbar -->
+      <header class="topbar glass-topbar">
+        <button id="menu-btn" class="icon-btn lg:hidden">☰</button>
+        <div class="relative hidden sm:block">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input id="global-search" class="search-input" placeholder="Search products, forecasts, actions…" />
+        </div>
+        <div class="flex-1 sm:hidden"></div>
+        <div class="ml-auto flex items-center gap-2">
+          <div id="demo-mode" class="demo-chip hidden">Demo data</div>
+          <div class="relative">
+            <button id="bell-btn" class="icon-btn relative">
+              🔔
+              <span id="bell-dot" class="bell-dot hidden"></span>
+            </button>
+            <div id="bell-dropdown" class="dropdown hidden">
+              <p class="px-4 pt-3 pb-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Notifications</p>
+              <div id="notif-list" class="max-h-72 overflow-y-auto"></div>
+            </div>
+          </div>
+          <div class="relative">
+            <button id="user-btn" class="user-chip">
+              <span id="user-avatar" class="avatar">A</span>
+              <span class="hidden md:block text-left">
+                <span id="user-name" class="block text-xs font-bold text-slate-800 leading-tight">Admin</span>
+                <span id="user-role" class="block text-[10px] text-slate-400 leading-tight">Administrator</span>
+              </span>
+              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div id="user-dropdown" class="dropdown hidden">
+              <button class="dropdown-item" id="logout-btn">🚪 Sign out</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main id="content" class="content-area">
+        <div class="skeleton-screen">
+          <div class="skeleton-line w-56 h-7 mb-2"></div>
+          <div class="skeleton-line w-80 h-4 mb-8"></div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+          </div>
+          <div class="grid lg:grid-cols-3 gap-5">
+            <div class="skeleton-card lg:col-span-2 h-72"></div>
+            <div class="skeleton-card h-72"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Approval modal -->
+  <div id="approve-modal" class="modal hidden">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-panel glass rounded-3xl p-6 sm:p-8 max-w-lg w-full">
+      <h3 class="text-xl font-bold text-slate-900 mb-1">Review recommendation</h3>
+      <p id="modal-subtitle" class="text-sm text-slate-500 mb-5"></p>
+      <div id="modal-product" class="rounded-2xl bg-white/70 border border-slate-100 p-4 mb-4"></div>
+      <label class="form-label" for="modal-comment">Approval comment (optional)</label>
+      <textarea id="modal-comment" rows="3" class="input-base" placeholder="e.g. Approved to cover monsoon demand spike…"></textarea>
+      <div class="flex gap-3 mt-6 justify-end">
+        <button class="btn btn-ghost" data-close-modal>Cancel</button>
+        <button id="confirm-approve-btn" class="btn btn-emerald">✓ Approve & place order</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/mockData.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

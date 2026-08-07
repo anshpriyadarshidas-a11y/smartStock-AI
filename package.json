@@ -10,6 +10,8 @@
     "install:all": "npm install --workspaces && pip install -r ai-service/requirements.txt",
     "dev": "npm run dev --workspace backend",
     "start": "npm run start --workspace backend",
+    "dev:frontend": "node frontend/server.js",
+    "start:frontend": "node frontend/server.js",
     "test": "npm run test --workspace backend",
     "test:e2e": "playwright test",
     "lint": "npm run lint --workspace backend",
