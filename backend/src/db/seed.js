@@ -111,7 +111,7 @@ async function seedData({ force = false, store = null } = {}) {
 if (require.main === module) {
   initStore()
     .then((store) => seedData({ force: process.argv.includes('--force'), store }))
-    .then(async ({ seeded }) => {
+    .then(async () => {
       const active = getStore();
       if (active && typeof active.close === 'function') {
         await active.close().catch(() => {});
