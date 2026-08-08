@@ -55,3 +55,26 @@ This repository defines and implements custom AI agents and skills to automate c
 | Low Stock Event / Scheduled Run | Inventory Agent runs analysis & generates pending recommendation | Manager receives alert & reviews proposal |
 | Manager Approves | Agent logs audit entry & executes purchase order (raises stock) | Order fulfilled |
 | Manager Rejects | Agent logs audit entry & leaves inventory untouched | Decision recorded in audit log |
+
+---
+
+## Recent Operational Notes (2026-08-08)
+
+- The local ML pytest suite passes: `6 passed` (unit tests for `predict.py`). The runtime emits `scikit-learn` unpickle warnings when loading older artifacts; this is a non-fatal compatibility warning to be addressed during model retraining.
+
+- To run a full agent analysis and generate live predictions from the running ML service:
+
+```bash
+# trigger the Inventory Agent from the backend (requires backend server running)
+curl -X POST http://localhost:4000/predict -H "Authorization: Bearer <admin-token>" -d '{}'
+# or run the agent directly in-node
+node backend/src/services/agent/inventoryAgent.js
+```
+
+- To seed realistic ML-driven predictions and produce manager audit logs, run the helper script:
+
+```bash
+node backend/scripts/seed_real_data.js
+```
+
+Seed output and service logs (if using the PowerShell job approach) are available under `service-logs/` in the repository root.
