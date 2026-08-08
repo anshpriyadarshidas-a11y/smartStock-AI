@@ -45,7 +45,11 @@ class Store {
         fs.renameSync(tmp, this.filePath);
       } catch (err) {
         fs.copyFileSync(tmp, this.filePath);
-        try { fs.unlinkSync(tmp); } catch (_) {}
+        try {
+          fs.unlinkSync(tmp);
+        } catch (cleanupErr) {
+          console.warn('[store] cleanup temp file failed:', cleanupErr.message);
+        }
       }
     } catch (err) {
       fs.writeFileSync(this.filePath, content, 'utf8');

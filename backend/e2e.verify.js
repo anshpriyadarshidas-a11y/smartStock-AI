@@ -78,7 +78,8 @@ function check(name, cond, extra = '') {
   check('GET /forecast returns product forecast', !!myForecast, `trend=${myForecast?.trendScore}`);
 
   const recs = await call('/recommendations?status=pending', {}, adminToken);
-  check('GET /recommendations lists pending', recs.body.data.some((r) => r.productId === productId));
+  const pendingRec = recs.body.data.find((r) => r.productId === productId);
+  check('GET /recommendations lists pending', !!pendingRec);
 
   const alerts = await call('/alerts', {}, adminToken);
   check('GET /alerts returns alerts', Array.isArray(alerts.body.data));
@@ -87,7 +88,7 @@ function check(name, cond, extra = '') {
   const before = (await call('/products', {}, adminToken)).body.data.find((p) => p.id === productId).currentStock;
   const approve = await call('/approve', {
     method: 'POST',
-    body: JSON.stringify({ id: productId, decision: 'approved', comment: 'E2E: approved for demand spike' }),
+    body: JSON.stringify({ id: pendingRec.id, decision: 'approved', comment: 'E2E: approved for demand spike' }),
   }, managerToken);
   check('manager approves recommendation', approve.status === 200 && approve.body.data.prediction.status === 'approved', `order=${approve.body.data.prediction?.recommendedOrderQty}`);
   check('audit log entry created', approve.body.data.audit?.managerDecision === 'approved' && approve.body.data.audit?.approvedBy === 'Priya Manager');
