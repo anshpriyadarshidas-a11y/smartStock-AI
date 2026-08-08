@@ -37,9 +37,19 @@ class Store {
 
   _persist() {
     fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-    const tmp = `${this.filePath}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2), 'utf8');
-    fs.renameSync(tmp, this.filePath);
+    const content = JSON.stringify(this.data, null, 2);
+    try {
+      const tmp = `${this.filePath}.tmp`;
+      fs.writeFileSync(tmp, content, 'utf8');
+      try {
+        fs.renameSync(tmp, this.filePath);
+      } catch (err) {
+        fs.copyFileSync(tmp, this.filePath);
+        try { fs.unlinkSync(tmp); } catch (_) {}
+      }
+    } catch (err) {
+      fs.writeFileSync(this.filePath, content, 'utf8');
+    }
   }
 
   _nextId(name) {
