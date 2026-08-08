@@ -14,6 +14,7 @@
     "start:frontend": "node frontend/server.js",
     "start:ml": "python ml/app.py",
     "test": "npm run test --workspace backend",
+    "start:all": "node ./bin/start-all.js",
     "test:e2e": "playwright test",
     "lint": "npm run lint --workspace backend",
     "seed": "npm run seed --workspace backend"
